@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+@theme {
+  /* Police unique, moderne et propre */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  /* Palette "Modern Dark" */
+  --color-back: #09090b;       /* Zinc 950 (Fond principal) */
+  --color-surface: #18181b;    /* Zinc 900 (Cartes) */
+  --color-surface-hover: #27272a; /* Zinc 800 */
+  
+  /* Accents Vibrants mais Sobres */
+  --color-primary: #6366f1;    /* Indigo 500 (Vibrant) */
+  --color-primary-glow: #4f46e5; /* Indigo 600 */
+  
+  /* Status */
+  --color-success: #10b981;    /* Emerald 500 */
+  --color-warning: #f59e0b;    /* Amber 500 */
+  --color-danger: #ef4444;     /* Red 500 */
+
+  /* Animations */
+  --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* --- VARIABLES SHADCN (Mode Dark forcé) --- */
+:root {
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+  --card: 240 10% 3.9%;
+  --card-foreground: 0 0% 98%;
+  --popover: 240 10% 3.9%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 263.4 70% 50.4%; /* Violet moderne */
+  --primary-foreground: 210 40% 98%;
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 64.9%;
+  --accent: 240 3.7% 15.9%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 240 3.7% 15.9%;
+  --input: 240 3.7% 15.9%;
+  --ring: 240 4.9% 83.9%;
+}
+
+/* Styles globaux */
+body {
+  background-color: var(--color-back);
+  color: #e4e4e7; /* Zinc 200 */
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar Minimaliste */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background-color: #3f3f46;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover { background-color: #52525b; }

@@ -1,0 +1,93 @@
+# Rust / Cargo (racine)
+/target/
+/Cargo.lock  # Gardez pour un binaire, ignorez pour une lib
+**/*.rs.bk
+*.pdb
+
+# Backend
+/backend/target/
+/backend/.env
+/backend/.env.*
+/backend/**/*.rs.bk
+/backend/debug/
+/backend/*.log
+/backend/*.db
+/backend/*.sqlite
+/backend/*.sqlite3
+
+# Frontend
+/frontend/node_modules/
+/frontend/dist/
+/frontend/build/
+/frontend/.next/
+/frontend/out/
+/frontend/.nuxt/
+/frontend/.cache/
+/frontend/.parcel-cache/
+/frontend/.vite/
+/frontend/npm-debug.log*
+/frontend/yarn-debug.log*
+/frontend/yarn-error.log*
+/frontend/pnpm-debug.log*
+/frontend/.pnpm-store/
+/frontend/coverage/
+/frontend/.env
+/frontend/.env.local
+/frontend/.env.*.local
+/frontend/*.local
+
+# Config - fichiers sensibles
+/config/.env
+/config/*.secret
+/config/local.*
+/config/*.local
+
+# Assets - fichiers temporaires
+/assets/tmp/
+/assets/temp/
+/assets/*.tmp
+
+# Overlays - si vous avez des builds
+/overlays/dist/
+/overlays/build/
+/overlays/node_modules/
+
+# IDE / Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.vim/
+.helix/
+.zed/
+*.iml
+.project
+.settings/
+.vs/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+._*
+
+# Logs globaux
+*.log
+debug/
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Build artifacts
+*.o
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+*.app
