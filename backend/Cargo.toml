@@ -3,22 +3,32 @@ name = "backend"
 version = "0.1.0"
 edition = "2021"
 
+# Nouveau : deux binaires
+[[bin]]
+name = "server"
+path = "src/main.rs"
+
+[[bin]]
+name = "rustizarr"
+path = "src/cli.rs"
+
 [dependencies]
-# Serveur Web & Async
+# ... vos dépendances existantes
 tokio = { version = "1", features = ["full"] }
 axum = { version = "0.7", features = ["multipart"] }
 tower-http = { version = "0.5", features = ["cors", "fs"] }
-
-# HTTP Client & JSON
 reqwest = { version = "0.12", features = ["json", "multipart"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-
-# Traitement d'image
 image = "0.24" 
 imageproc = "0.23.0"
 rusttype = "0.9.3"
-
-# Utilitaires
 dotenv = "0.15"
 anyhow = "1.0"
+futures = "0.3"
+tokio-stream = "0.1"
+serde-xml-rs = "0.6"
+
+
+# Ajout pour le CLI
+clap = { version = "4.5", features = ["derive"] }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Activity, Zap, Search, LayoutGrid, List, CheckCircle2, Clock, HardDrive, RefreshCw, Filter, X, ArrowLeftRight } from 'lucide-react';
+import { Activity, Zap, Search, LayoutGrid, List, CheckCircle2, Clock, HardDrive, RefreshCw, Filter, X, ArrowLeftRight, Film, Tv } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Toaster, toast } from 'sonner';
 
@@ -24,8 +24,17 @@ interface PlexMovie {
   ratingKey: string;
   year?: number;
   audienceRating?: number;
-  Label?: PlexLabel[];
+  Label?: PlexLabel[] | any;
   Media?: PlexMedia[];
+}
+
+interface PlexShow {
+  title: string;
+  ratingKey: string;
+  year?: number;
+  audienceRating?: number;
+  label?: PlexLabel[] | any;
+  Guid?: { id: string }[];
 }
 
 interface MovieDisplay {
@@ -38,11 +47,22 @@ interface MovieDisplay {
   audioCodec?: string;
 }
 
+interface ShowDisplay {
+  id: string;
+  title: string;
+  year: string;
+  status: 'processed' | 'pending';
+  rating?: number;
+}
+
 type FilterType = 'all' | 'processed' | 'pending';
+type TabType = 'movies' | 'shows';
 
 function App() {
+  const [activeTab, setActiveTab] = useState<TabType>('movies');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [movies, setMovies] = useState<MovieDisplay[]>([]);
+  const [shows, setShows] = useState<ShowDisplay[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -51,23 +71,29 @@ function App() {
   const [comparisonMode, setComparisonMode] = useState<'side-by-side' | 'slider'>('side-by-side');
 
   useEffect(() => {
-    fetchLibrary();
+    Promise.all([fetchLibrary(), fetchShows()]).finally(() => setLoading(false));
   }, []);
 
   const fetchLibrary = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/library');
+      const response = await fetch('http://localhost:3030/api/library');
       const plexMovies: PlexMovie[] = await response.json();
 
       const formattedMovies: MovieDisplay[] = plexMovies.map(m => {
         let labelsArray: any[] = [];
         if (Array.isArray(m.Label)) {
             labelsArray = m.Label;
-        } else if (m.Label) {
-            labelsArray = [m.Label];
+        } else if (m.Label && typeof m.Label === 'object') {
+            if (Array.isArray((m.Label as any).tag)) {
+                labelsArray = (m.Label as any).tag;
+            } else {
+                labelsArray = [m.Label];
+            }
         }
 
-        const isProcessed = labelsArray.some((l: any) => l.tag?.toLowerCase() === 'rustizarr');
+        const isProcessed = labelsArray.some((l: any) => 
+          typeof l === 'object' ? l.tag?.toLowerCase() === 'rustizarr' : l?.toLowerCase() === 'rustizarr'
+        );
         const res = m.Media?.[0]?.videoResolution?.toUpperCase() || "UNK";
         const audio = m.Media?.[0]?.audioCodec?.toUpperCase() || "";
 
@@ -83,27 +109,68 @@ function App() {
       });
 
       setMovies(formattedMovies);
-      setLoading(false);
     } catch (error) {
-      console.error("Erreur de connexion au Backend:", error);
-      toast.error("Erreur de connexion au serveur");
-      setLoading(false);
+      console.error("Erreur de connexion au Backend (films):", error);
+      toast.error("Erreur de connexion au serveur (films)");
+    }
+  };
+
+  const fetchShows = async () => {
+    try {
+      const response = await fetch('http://localhost:3030/api/shows');
+      const plexShows: PlexShow[] = await response.json();
+
+      const formattedShows: ShowDisplay[] = plexShows.map(s => {
+        let labelsArray: any[] = [];
+        if (Array.isArray(s.label)) {
+            labelsArray = s.label;
+        } else if (s.label && typeof s.label === 'object') {
+            if (Array.isArray((s.label as any).tag)) {
+                labelsArray = (s.label as any).tag;
+            } else {
+                labelsArray = [s.label];
+            }
+        }
+
+        const isProcessed = labelsArray.some((l: any) => 
+          typeof l === 'object' ? l.tag?.toLowerCase() === 'rustizarr' : l?.toLowerCase() === 'rustizarr'
+        );
+
+        return {
+          id: s.ratingKey,
+          title: s.title,
+          year: s.year?.toString() || "----",
+          status: isProcessed ? 'processed' : 'pending',
+          rating: s.audienceRating
+        };
+      });
+
+      setShows(formattedShows);
+    } catch (error) {
+      console.error("Erreur de connexion au Backend (séries):", error);
+      toast.error("Erreur de connexion au serveur (séries)");
     }
   };
 
   const refreshLibrary = async () => {
     setRefreshing(true);
-    const toastId = toast.loading('Rafraîchissement du cache...');
+    const toastId = toast.loading(activeTab === 'movies' ? 'Rafraîchissement des films...' : 'Rafraîchissement des séries...');
     
     try {
-      const response = await fetch('http://localhost:3000/api/library/refresh', {
-        method: 'POST'
-      });
+      const endpoint = activeTab === 'movies' 
+        ? 'http://localhost:3030/api/library/refresh'
+        : 'http://localhost:3030/api/shows/refresh';
+        
+      const response = await fetch(endpoint, { method: 'POST' });
       const data = await response.json();
       
       if (data.success) {
-        await fetchLibrary();
-        toast.success(`✅ ${data.total} films rechargés (${data.processed} traités)`, {
+        if (activeTab === 'movies') {
+          await fetchLibrary();
+        } else {
+          await fetchShows();
+        }
+        toast.success(`✅ ${data.total} ${activeTab === 'movies' ? 'films' : 'séries'} rechargé(e)s (${data.processed} traité(e)s)`, {
           id: toastId,
           duration: 3000
         });
@@ -119,10 +186,14 @@ function App() {
   };
 
   const triggerScan = async () => {
+    const endpoint = activeTab === 'movies'
+      ? 'http://localhost:3030/scan'
+      : 'http://localhost:3030/scan-shows';
+      
     toast.promise(
-      fetch('http://localhost:3000/scan'),
+      fetch(endpoint),
       {
-        loading: 'Lancement du scan...',
+        loading: `Lancement du scan ${activeTab === 'movies' ? 'films' : 'séries'}...`,
         success: '🚀 Scan lancé ! Surveillez le terminal serveur',
         error: 'Erreur lors du lancement du scan'
       }
@@ -130,16 +201,17 @@ function App() {
   };
 
   // Filtrage combiné : recherche + statut
-  const filteredMovies = movies.filter(m => {
-    const matchesSearch = m.title.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || m.status === filterStatus;
+  const currentItems = activeTab === 'movies' ? movies : shows;
+  const filteredItems = currentItems.filter(item => {
+    const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
 
   const stats = {
-    total: movies.length,
-    processed: movies.filter(m => m.status === 'processed').length,
-    pending: movies.filter(m => m.status === 'pending').length
+    total: currentItems.length,
+    processed: currentItems.filter(m => m.status === 'processed').length,
+    pending: currentItems.filter(m => m.status === 'pending').length
   };
 
   return (
@@ -170,11 +242,39 @@ function App() {
         </div>
 
         <div className="flex gap-3">
-            <StatsCard label="Films Total" value={stats.total.toString()} icon={<HardDrive size={16} className="text-white"/>} />
+            <StatsCard label={activeTab === 'movies' ? 'Films' : 'Séries'} value={stats.total.toString()} icon={activeTab === 'movies' ? <Film size={16} className="text-white"/> : <Tv size={16} className="text-white"/>} />
             <StatsCard label="Traités" value={stats.processed.toString()} icon={<CheckCircle2 size={16} className="text-success"/>} />
             <StatsCard label="En Attente" value={stats.pending.toString()} icon={<Clock size={16} className="text-warning"/>} />
         </div>
       </header>
+
+      {/* TABS */}
+      <div className="flex gap-2 mb-6">
+        <Button
+          variant={activeTab === 'movies' ? 'default' : 'outline'}
+          onClick={() => {
+            setActiveTab('movies');
+            setSearchTerm('');
+            setFilterStatus('all');
+          }}
+          className={`flex items-center gap-2 ${activeTab === 'movies' ? 'bg-primary text-white' : 'bg-zinc-900 border-zinc-800'}`}
+        >
+          <Film size={16} />
+          Films ({movies.length})
+        </Button>
+        <Button
+          variant={activeTab === 'shows' ? 'default' : 'outline'}
+          onClick={() => {
+            setActiveTab('shows');
+            setSearchTerm('');
+            setFilterStatus('all');
+          }}
+          className={`flex items-center gap-2 ${activeTab === 'shows' ? 'bg-primary text-white' : 'bg-zinc-900 border-zinc-800'}`}
+        >
+          <Tv size={16} />
+          Séries ({shows.length})
+        </Button>
+      </div>
 
       {/* CONTROLS */}
       <div className="space-y-4 mb-8">
@@ -183,7 +283,7 @@ function App() {
           <div className="relative w-full md:w-96">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 h-4 w-4" />
             <Input 
-              placeholder="Rechercher un film..." 
+              placeholder={`Rechercher ${activeTab === 'movies' ? 'un film' : 'une série'}...`}
               className="pl-10 bg-back border-zinc-800 focus:border-primary/50 text-sm h-9"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -274,9 +374,9 @@ function App() {
           <Activity className="animate-spin text-primary" size={32} />
           <p className="text-zinc-500 text-sm">Chargement de la bibliothèque...</p>
         </div>
-      ) : filteredMovies.length === 0 ? (
+      ) : filteredItems.length === 0 ? (
         <div className="text-center py-20 text-zinc-500">
-          <p className="text-lg">Aucun film trouvé</p>
+          <p className="text-lg">Aucun {activeTab === 'movies' ? 'film' : 'série'} trouvé</p>
           <p className="text-sm mt-2">Essayez de modifier vos filtres</p>
         </div>
       ) : (
@@ -285,14 +385,24 @@ function App() {
           className={`grid gap-4 ${viewMode === 'grid' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'grid-cols-1'}`}
         >
           <AnimatePresence>
-            {filteredMovies.map((movie) => (
-              <MovieCard 
-                key={movie.id} 
-                movie={movie} 
-                mode={viewMode}
-                onClick={() => movie.status === 'processed' && setSelectedMovie(movie)}
-              />
-            ))}
+            {activeTab === 'movies' ? (
+              filteredItems.map((movie) => (
+                <MovieCard 
+                  key={movie.id} 
+                  movie={movie as MovieDisplay} 
+                  mode={viewMode}
+                  onClick={() => movie.status === 'processed' && setSelectedMovie(movie as MovieDisplay)}
+                />
+              ))
+            ) : (
+              filteredItems.map((show) => (
+                <ShowCard 
+                  key={show.id} 
+                  show={show as ShowDisplay} 
+                  mode={viewMode}
+                />
+              ))
+            )}
           </AnimatePresence>
         </motion.div>
       )}
@@ -407,7 +517,7 @@ const MovieCard = ({ movie, mode, onClick }: { movie: MovieDisplay, mode: 'grid'
         ${isGrid ? 'aspect-[2/3] w-full' : 'h-full aspect-[2/3] rounded-md border-b-0'}`}>
         
         <img 
-            src={`http://localhost:3000/api/image/${movie.id}`} 
+            src={`http://localhost:3030/api/image/${movie.id}`} 
             alt={movie.title}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
             loading="lazy" 
@@ -452,6 +562,104 @@ const MovieCard = ({ movie, mode, onClick }: { movie: MovieDisplay, mode: 'grid'
   );
 };
 
+// NOUVEAU : ShowCard pour les séries
+const ShowCard = ({ show, mode }: { show: ShowDisplay, mode: 'grid' | 'list' }) => {
+  const [showPreview, setShowPreview] = useState(false);
+  const isGrid = mode === 'grid';
+  
+  const statusConfig = {
+    processed: { color: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20', dot: 'bg-emerald-500' },
+    pending: { color: 'bg-amber-500/10 text-amber-500 border-amber-500/20', dot: 'bg-amber-500' },
+  }[show.status];
+
+  return (
+    <motion.div 
+      layout
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      transition={{ duration: 0.2 }}
+      onMouseEnter={() => setShowPreview(true)}
+      onMouseLeave={() => setShowPreview(false)}
+      className={`group relative bg-surface border border-white/5 rounded-xl overflow-hidden hover:border-primary/30 transition-all duration-300 hover:shadow-2xl hover:shadow-black/50
+        ${isGrid ? 'flex flex-col' : 'flex items-center p-3 gap-4 h-20'}`}
+    >
+      {/* Preview Overlay (Grid uniquement) */}
+      {isGrid && showPreview && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 bg-black/95 z-10 p-4 flex flex-col justify-center gap-2"
+        >
+          <h3 className="font-bold text-white text-base">{show.title}</h3>
+          <div className="space-y-1 text-xs text-zinc-400">
+            <div className="flex items-center gap-2">
+              <span className="text-zinc-500">📅</span>
+              <span>{show.year}</span>
+            </div>
+            {show.rating && (
+              <div className="flex items-center gap-2">
+                <span className="text-yellow-500">⭐</span>
+                <span>{show.rating.toFixed(1)}/10</span>
+              </div>
+            )}
+          </div>
+          <Badge variant="outline" className={`${statusConfig.color} border w-fit mt-2`}>
+            {show.status === 'processed' ? '✓ Traité' : '⏳ En attente'}
+          </Badge>
+        </motion.div>
+      )}
+   
+      <div className={`relative bg-zinc-900 overflow-hidden flex items-center justify-center border-b border-white/5
+        ${isGrid ? 'aspect-[2/3] w-full' : 'h-full aspect-[2/3] rounded-md border-b-0'}`}>
+        
+        <img 
+            src={`http://localhost:3030/api/image/${show.id}`} 
+            alt={show.title}
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+            loading="lazy" 
+        />
+        
+        <div className="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      </div>
+
+      <div className={`flex flex-col flex-grow min-w-0 ${isGrid ? 'p-3' : 'py-1 pr-4'}`}>
+        <div className="flex justify-between items-start">
+          <div className="min-w-0">
+            <h3 className="font-medium text-zinc-200 group-hover:text-primary transition-colors text-sm truncate pr-2" title={show.title}>
+                {show.title}
+            </h3>
+            <p className="text-[11px] text-zinc-500 mt-0.5 font-mono">{show.year}</p>
+          </div>
+          
+          {isGrid && (
+             <Badge variant="outline" className={`${statusConfig.color} border h-4 px-1.5 text-[9px] uppercase tracking-wide gap-1 rounded-sm`}>
+                <span className={`w-1 h-1 rounded-full ${statusConfig.dot}`}></span>
+                {show.status === 'processed' ? 'OK' : 'WAIT'}
+             </Badge>
+          )}
+        </div>
+        
+        {!isGrid && (
+             <div className="ml-auto flex items-center gap-4">
+                 <Badge variant="outline" className={`${statusConfig.color} border h-5 px-2 text-[10px] uppercase tracking-wide gap-1.5`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot} animate-pulse`}></span>
+                    {show.status}
+                 </Badge>
+             </div>
+        )}
+
+        {isGrid && (
+          <div className="mt-auto pt-3 border-t border-white/5 flex items-center justify-between text-[10px] text-zinc-600 font-mono">
+            <span>ID: {show.id}</span>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+};
+
 // --- MODAL DE COMPARAISON ---
 const ComparisonModal = ({ 
   movie, 
@@ -477,12 +685,8 @@ const ComparisonModal = ({
     setSliderPosition(Math.max(0, Math.min(100, percentage)));
   };
 
-  // URL du poster original Plex (sans traitement)
-  const originalPosterUrl = `http://localhost:3000/api/image/${movie.id}`;
-  
-  // Pour l'instant, on utilise la même image car on n'a pas l'original
-  // Dans une vraie implémentation, tu pourrais stocker l'URL de l'original
-  const processedPosterUrl = `http://localhost:3000/api/image/${movie.id}`;
+  const originalPosterUrl = `http://localhost:3030/api/image/${movie.id}`;
+  const processedPosterUrl = `http://localhost:3030/api/image/${movie.id}`;
 
   return (
     <AnimatePresence>

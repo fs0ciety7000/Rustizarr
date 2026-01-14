@@ -91,3 +91,4 @@ logs/
 *.exe
 *.out
 *.app
+.env

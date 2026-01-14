@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  rustizarr-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: rustizarr-dev
+    ports:
+      - "3000:3000"
+    volumes:
+      # Hot reload : monte le code source
+      - ./backend:/app/backend
+      - ./assets:/app/assets
+      - ./overlays:/app/overlays
+      - ./config:/app/config
+      # Cache Cargo pour accélérer les rebuilds
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/app/target
+    environment:
+      - RUST_LOG=debug
+    env_file:
+      - ./backend/.env
+    restart: unless-stopped
+    networks:
+      - rustizarr-network
+
+  # Optionnel : Frontend si vous développez dessus
+  frontend:
+    image: node:20-alpine
+    container_name: rustizarr-frontend
+    working_dir: /app
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - frontend-node-modules:/app/node_modules
+    command: sh -c "npm install && npm run dev -- --host"
+    networks:
+      - rustizarr-network
+
+volumes:
+  cargo-cache:
+  target-cache:
+  frontend-node-modules:
+
+networks:
+  rustizarr-network:
+    driver: bridge
