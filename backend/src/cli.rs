@@ -2,6 +2,7 @@
 use clap::{Parser, Subcommand};
 use dotenv::dotenv;
 use std::env;
+use std::path::PathBuf;
 
 mod plex;
 mod tmdb;
@@ -132,15 +133,59 @@ enum Commands {
     },
 }
 
+/// Charge le fichier .env depuis plusieurs emplacements possibles
+fn load_env() {
+    let env_paths = vec![
+        PathBuf::from(".env"),                                          // Dossier courant
+        PathBuf::from("backend/.env"),                                  // Dossier backend (si lancé depuis la racine)
+        dirs::config_dir()
+            .map(|d| d.join("rustizarr/.env"))
+            .unwrap_or_default(),                                       // ~/.config/rustizarr/.env
+        dirs::home_dir()
+            .map(|d| d.join(".rustizarr.env"))
+            .unwrap_or_default(),                                       // ~/.rustizarr.env
+    ];
+    
+    for path in &env_paths {
+        if path.exists() {
+            println!("📁 Configuration chargée depuis: {}", path.display());
+            dotenv::from_path(path).ok();
+            return;
+        }
+    }
+    
+    eprintln!("⚠️  Aucun fichier .env trouvé!");
+    eprintln!("   Emplacements cherchés:");
+    eprintln!("   - ./.env");
+    eprintln!("   - ./backend/.env");
+    if let Some(config) = dirs::config_dir() {
+        eprintln!("   - {}", config.join("rustizarr/.env").display());
+    }
+    if let Some(home) = dirs::home_dir() {
+        eprintln!("   - {}", home.join(".rustizarr.env").display());
+    }
+    eprintln!("\n💡 Créez un fichier .env avec:");
+    eprintln!("   PLEX_URL=http://votre-plex:32400");
+    eprintln!("   PLEX_TOKEN=votre_token");
+    eprintln!("   TMDB_KEY=votre_cle");
+    eprintln!("   LIBRARY_ID=1");
+    eprintln!("   SHOWS_LIBRARY_ID=2");
+}
+
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    dotenv().ok();
+    load_env();
     
     let cli = Cli::parse();
     
-    let plex_url = env::var("PLEX_URL").expect("❌ PLEX_URL manquant");
-    let plex_token = env::var("PLEX_TOKEN").expect("❌ PLEX_TOKEN manquant");
-    let tmdb_key = env::var("TMDB_KEY").expect("❌ TMDB_KEY manquant");
+   // Récupère les variables d'environnement
+    let plex_url = env::var("PLEX_URL")
+        .expect("❌ PLEX_URL manquant dans le fichier .env");
+    let plex_token = env::var("PLEX_TOKEN")
+        .expect("❌ PLEX_TOKEN manquant dans le fichier .env");
+    let tmdb_key = env::var("TMDB_KEY")
+        .expect("❌ TMDB_KEY manquant dans le fichier .env");
     let default_library = env::var("LIBRARY_ID").unwrap_or("1".to_string());
     let default_shows_library = env::var("SHOWS_LIBRARY_ID").unwrap_or("2".to_string());
     

@@ -1,13 +1,48 @@
 use image::{imageops, DynamicImage, Rgba};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use anyhow::Result;
 use imageproc::drawing::{draw_text_mut, text_size};
 use rusttype::{Font, Scale};
 use std::fs;
+use std::env;
 
 pub struct ImageProcessor;
 
 impl ImageProcessor {
+    /// Retourne le chemin de base des overlays
+    fn get_overlays_base_path() -> PathBuf {
+        // 1. Variable d'environnement (priorité)
+        if let Ok(path) = env::var("OVERLAYS_PATH") {
+            let p = PathBuf::from(path);
+            if p.exists() {
+                return p;
+            }
+        }
+        
+        // 2. ~/.config/rustizarr/overlays
+        if let Some(config_dir) = dirs::config_dir() {
+            let config_overlays = config_dir.join("rustizarr/overlays");
+            if config_overlays.exists() {
+                return config_overlays;
+            }
+        }
+        
+        // 3. Dossier courant (développement)
+        let current_dir = PathBuf::from("overlays");
+        if current_dir.exists() {
+            return current_dir;
+        }
+        
+        // 4. Dossier overlays (depuis la racine du projet)
+        let backend_overlays = PathBuf::from("overlays");
+        if backend_overlays.exists() {
+            return backend_overlays;
+        }
+        
+        // 5. Fallback par défaut
+        PathBuf::from("overlays")
+    }
+
     /// Télécharge et standardise une image à 2000x3000px
     pub async fn download_image(url: &str) -> Result<DynamicImage> {
         let client = reqwest::Client::builder()
@@ -27,8 +62,14 @@ impl ImageProcessor {
 
     /// Applique les gradients haut et bas via PNG overlay
     pub fn add_gradient_masks(mut base_image: DynamicImage, overlays_base: &str) -> anyhow::Result<DynamicImage> {
-        let top_path = Path::new(overlays_base).join("gradients/gradient_top.png");
-        let bottom_path = Path::new(overlays_base).join("gradients/gradient_bottom.png");
+        let base_path = if overlays_base.is_empty() {
+            Self::get_overlays_base_path()
+        } else {
+            PathBuf::from(overlays_base)
+        };
+        
+        let top_path = base_path.join("gradients/gradient_top.png");
+        let bottom_path = base_path.join("gradients/gradient_bottom.png");
 
         let poster_w = base_image.width();
         let poster_h = base_image.height();
@@ -63,7 +104,13 @@ impl ImageProcessor {
 
     /// Ajoute le titre du film/série en bas (multiline + word wrap)
     pub fn add_movie_title(base_image: DynamicImage, title: &str, overlays_base: &str) -> anyhow::Result<DynamicImage> {
-        let font_path = Path::new(overlays_base).join("fonts/Colus-Regular.ttf");
+        let base_path = if overlays_base.is_empty() {
+            Self::get_overlays_base_path()
+        } else {
+            PathBuf::from(overlays_base)
+        };
+        
+        let font_path = base_path.join("fonts/Colus-Regular.ttf");
         if !font_path.exists() { 
             println!("   ⚠️ Police Colus introuvable : {:?}", font_path);
             return Ok(base_image); 
@@ -135,7 +182,13 @@ impl ImageProcessor {
 
     /// Ajoute le border inner glow
     pub fn add_inner_glow_border(mut base_image: DynamicImage, overlays_base: &str) -> anyhow::Result<DynamicImage> {
-        let border_path = Path::new(overlays_base).join("overlay-innerglow.png");
+        let base_path = if overlays_base.is_empty() {
+            Self::get_overlays_base_path()
+        } else {
+            PathBuf::from(overlays_base)
+        };
+        
+        let border_path = base_path.join("overlay-innerglow.png");
         if !border_path.exists() { 
             println!("   ⚠️ Inner glow introuvable : {:?}", border_path);
             return Ok(base_image); 
@@ -151,38 +204,43 @@ impl ImageProcessor {
         Ok(base_image)
     }
     
-  /// Ajoute une bordure (status ou recently added)
-pub fn add_status_border(mut base_image: DynamicImage, overlays_base: &str, status_filename: &str) -> anyhow::Result<DynamicImage> {
-    // Si c'est "recently_added.png", chercher à la racine
-    // Sinon chercher dans le dossier Status/
-    let border_path = if status_filename == "recently_added.png" {
-        Path::new(overlays_base).join(status_filename)
-    } else {
-        Path::new(overlays_base).join("Status").join(status_filename)
-    };
-    
-    println!("   🔍 Recherche bordure : {:?}", border_path);
-    
-    if !border_path.exists() { 
-        println!("   ⚠️ Bordure introuvable : {:?}", border_path);
-        println!("   🔄 Utilisation de l'inner glow par défaut");
-        return Self::add_inner_glow_border(base_image, overlays_base);
+    /// Ajoute une bordure (status ou recently added)
+    pub fn add_status_border(mut base_image: DynamicImage, overlays_base: &str, status_filename: &str) -> anyhow::Result<DynamicImage> {
+        let base_path = if overlays_base.is_empty() {
+            Self::get_overlays_base_path()
+        } else {
+            PathBuf::from(overlays_base)
+        };
+        
+        // Si c'est "recently_added.png", chercher à la racine
+        // Sinon chercher dans le dossier Status/
+        let border_path = if status_filename == "recently_added.png" {
+            base_path.join(status_filename)
+        } else {
+            base_path.join("Status").join(status_filename)
+        };
+        
+        println!("   🔍 Recherche bordure : {:?}", border_path);
+        
+        if !border_path.exists() { 
+            println!("   ⚠️ Bordure introuvable : {:?}", border_path);
+            println!("   🔄 Utilisation de l'inner glow par défaut");
+            return Self::add_inner_glow_border(base_image, overlays_base);
+        }
+
+        let border_img = image::open(&border_path)?;
+        
+        let border_resized = border_img.resize_exact(
+            base_image.width(),
+            base_image.height(),
+            imageops::FilterType::Lanczos3
+        );
+        
+        imageops::overlay(&mut base_image, &border_resized, 0, 0);
+        println!("   ✅ Bordure '{}' appliquée", status_filename);
+        
+        Ok(base_image)
     }
-
-    let border_img = image::open(&border_path)?;
-    
-    let border_resized = border_img.resize_exact(
-        base_image.width(),
-        base_image.height(),
-        imageops::FilterType::Lanczos3
-    );
-    
-    imageops::overlay(&mut base_image, &border_resized, 0, 0);
-    println!("   ✅ Bordure '{}' appliquée", status_filename);
-    
-    Ok(base_image)
-}
-
 
     /// Ajoute un overlay (résolution, édition, status, recently added, etc.)
     /// `align_bottom`: true = coin bas-gauche, false = coin haut-gauche
@@ -266,7 +324,13 @@ pub fn add_status_border(mut base_image: DynamicImage, overlays_base: &str, stat
 
         // Ajout de la note si fournie
         if let Some(val) = score {
-            let font_path = Path::new(overlays_base).join("fonts/AvenirNextLTPro-Bold.ttf");
+            let base_path = if overlays_base.is_empty() {
+                Self::get_overlays_base_path()
+            } else {
+                PathBuf::from(overlays_base)
+            };
+            
+            let font_path = base_path.join("fonts/AvenirNextLTPro-Bold.ttf");
             if font_path.exists() {
                 let font_data = fs::read(font_path)?;
                 if let Some(font) = Font::try_from_vec(font_data) {
